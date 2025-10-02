@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import MedicineCard from '../components/MedicineCard';
+import SearchResults3D from '../components/SearchResults3D';
 import medicineService from '../services/api';
 
 const SearchMedicine = () => {
@@ -9,6 +10,7 @@ const SearchMedicine = () => {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState(null);
+  const [viewMode, setViewMode] = useState('3d'); // '3d' or 'cards'
 
   const handleSearch = async (e) => {
     e.preventDefault();
@@ -81,7 +83,7 @@ const SearchMedicine = () => {
         <motion.form
           variants={itemVariants}
           onSubmit={handleSearch}
-          className="max-w-3xl mx-auto mb-12"
+          className="max-w-3xl mx-auto mb-8"
         >
           <div className="relative">
             <input
@@ -105,6 +107,39 @@ const SearchMedicine = () => {
             </motion.button>
           </div>
         </motion.form>
+
+        {/* View Mode Toggle */}
+        {results.length > 0 && !loading && (
+          <motion.div 
+            variants={itemVariants}
+            className="flex justify-center gap-2 mb-6"
+          >
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode('3d')}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                viewMode === '3d'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              🎮 3D View
+            </motion.button>
+            <motion.button
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+              onClick={() => setViewMode('cards')}
+              className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                viewMode === 'cards'
+                  ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white'
+                  : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+              }`}
+            >
+              📇 Card View
+            </motion.button>
+          </motion.div>
+        )}
 
         {/* Error Message */}
         {error && (
@@ -158,18 +193,29 @@ const SearchMedicine = () => {
                   </h2>
                 </motion.div>
 
-                <motion.div
-                  variants={containerVariants}
-                  className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-                >
-                  {results.map((medicine) => (
-                    <MedicineCard
-                      key={medicine._id}
-                      medicine={medicine}
-                      onDelete={handleDelete}
+                {viewMode === '3d' ? (
+                  <motion.div variants={itemVariants}>
+                    <SearchResults3D 
+                      results={results}
+                      onCardClick={(medicine) => {
+                        // Handle card click if needed
+                      }}
                     />
-                  ))}
-                </motion.div>
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    variants={containerVariants}
+                    className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
+                  >
+                    {results.map((medicine) => (
+                      <MedicineCard
+                        key={medicine._id}
+                        medicine={medicine}
+                        onDelete={handleDelete}
+                      />
+                    ))}
+                  </motion.div>
+                )}
               </>
             )}
           </motion.div>

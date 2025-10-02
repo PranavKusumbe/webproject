@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import PillBottle3D from '../components/PillBottle3D';
+import EnhancedPillBottle3D from '../components/EnhancedPillBottle3D';
 
 const Home = () => {
   const containerVariants = {
@@ -49,7 +49,7 @@ const Home = () => {
           variants={itemVariants}
           className="mb-12"
         >
-          <PillBottle3D />
+          <EnhancedPillBottle3D />
         </motion.div>
 
         {/* Features Grid */}

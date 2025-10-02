@@ -1,5 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Canvas } from '@react-three/fiber';
+import { OrbitControls, PerspectiveCamera, Environment } from '@react-three/drei';
+import MedicineCard3D from '../components/MedicineCard3D';
 import medicineService from '../services/api';
 
 const ExpiredMedicines = () => {
@@ -7,6 +10,8 @@ const ExpiredMedicines = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [deleting, setDeleting] = useState(false);
+  const [shatteringIds, setShatteringIds] = useState([]);
+  const [viewMode, setViewMode] = useState('3d'); // '3d' or 'list'
 
   useEffect(() => {
     fetchExpiredMedicines();
@@ -49,11 +54,19 @@ const ExpiredMedicines = () => {
     }
 
     try {
+      // Start shatter animation
+      setShatteringIds(prev => [...prev, id]);
+      
+      // Wait for animation to complete
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      
       await medicineService.deleteMedicine(id);
       setExpiredMedicines(expiredMedicines.filter(m => m._id !== id));
+      setShatteringIds(prev => prev.filter(shId => shId !== id));
     } catch (err) {
       alert('Failed to delete medicine');
       console.error(err);
+      setShatteringIds(prev => prev.filter(shId => shId !== id));
     }
   };
 
@@ -147,12 +160,44 @@ const ExpiredMedicines = () => {
       >
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
-          <h1 className="text-5xl font-bold text-white mb-2">
-            ⚠️ Expired Medicines
-          </h1>
-          <p className="text-gray-300">
-            Manage expired inventory items
-          </p>
+          <div className="flex justify-between items-center">
+            <div>
+              <h1 className="text-5xl font-bold text-white mb-2">
+                ⚠️ Expired Medicines
+              </h1>
+              <p className="text-gray-300">
+                Manage expired inventory items
+              </p>
+            </div>
+            {expiredMedicines.length > 0 && (
+              <div className="flex gap-2">
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setViewMode('3d')}
+                  className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                    viewMode === '3d'
+                      ? 'bg-gradient-to-r from-red-500 to-red-700 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  🎮 3D View
+                </motion.button>
+                <motion.button
+                  whileHover={{ scale: 1.05 }}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setViewMode('list')}
+                  className={`px-6 py-3 rounded-lg font-semibold transition-all ${
+                    viewMode === 'list'
+                      ? 'bg-gradient-to-r from-red-500 to-red-700 text-white'
+                      : 'bg-gray-800 text-gray-300 hover:bg-gray-700'
+                  }`}
+                >
+                  📋 List View
+                </motion.button>
+              </div>
+            )}
+          </div>
         </motion.div>
 
         {/* Stats and Actions */}
@@ -193,7 +238,7 @@ const ExpiredMedicines = () => {
           )}
         </motion.div>
 
-        {/* Expired Medicines List */}
+        {/* Expired Medicines Display */}
         {expiredMedicines.length === 0 ? (
           <motion.div
             variants={itemVariants}
@@ -206,6 +251,79 @@ const ExpiredMedicines = () => {
             <p className="text-gray-300 text-lg">
               No expired medicines found in your inventory
             </p>
+          </motion.div>
+        ) : viewMode === '3d' ? (
+          <motion.div variants={itemVariants} className="h-[700px] bg-gray-900 bg-opacity-50 backdrop-blur-md rounded-2xl overflow-hidden">
+            <Canvas shadows>
+              <PerspectiveCamera makeDefault position={[0, 2, 8]} />
+              <OrbitControls
+                enableZoom={true}
+                minDistance={5}
+                maxDistance={15}
+                maxPolarAngle={Math.PI / 2}
+              />
+              
+              {/* Lighting */}
+              <ambientLight intensity={0.3} />
+              <directionalLight position={[10, 10, 5]} intensity={1} />
+              <pointLight position={[0, 5, 5]} intensity={1.5} color="#ff0000" />
+              <spotLight
+                position={[0, 10, 0]}
+                angle={0.6}
+                penumbra={1}
+                intensity={1}
+                color="#ff0000"
+              />
+              
+              {/* 3D Cards */}
+              {expiredMedicines.map((medicine, index) => {
+                const columns = 4;
+                const row = Math.floor(index / columns);
+                const col = index % columns;
+                const x = (col - columns / 2 + 0.5) * 1.5;
+                const y = -row * 2;
+                
+                return (
+                  <MedicineCard3D
+                    key={medicine._id}
+                    position={[x, y, 0]}
+                    medicine={medicine}
+                    onClick={() => handleDeleteSingle(medicine._id, medicine.name)}
+                    isExpired={true}
+                    isLowStock={false}
+                    shattering={shatteringIds.includes(medicine._id)}
+                    index={index}
+                  />
+                );
+              })}
+              
+              {/* Environment */}
+              <Environment preset="night" />
+              
+              {/* Floor */}
+              <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -5, 0]} receiveShadow>
+                <planeGeometry args={[50, 50]} />
+                <meshStandardMaterial
+                  color="#1a0000"
+                  roughness={0.2}
+                  metalness={0.8}
+                />
+              </mesh>
+
+              {/* Red fog for atmosphere */}
+              <fog attach="fog" args={['#1a0000', 10, 30]} />
+            </Canvas>
+
+            {/* Controls overlay */}
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="absolute bottom-4 left-1/2 transform -translate-x-1/2 bg-black bg-opacity-70 backdrop-blur-md rounded-lg px-6 py-3"
+            >
+              <p className="text-gray-300 text-sm text-center">
+                🖱️ Drag to rotate • 🔍 Scroll to zoom • 👆 Click to delete with shatter effect
+              </p>
+            </motion.div>
           </motion.div>
         ) : (
           <motion.div
