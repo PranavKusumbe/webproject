@@ -16,18 +16,49 @@ const AddMedicine = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(false);
+  const [lowStockWarning, setLowStockWarning] = useState(false);
+  const [expiryWarning, setExpiryWarning] = useState('');
+
+  // Get today's date in YYYY-MM-DD format for min date validation
+  const getTodayDate = () => {
+    return new Date().toISOString().split('T')[0];
+  };
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
+    
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
+
+    // Real-time validation for stock (low stock warning)
+    if (name === 'stock') {
+      const stockValue = parseInt(value);
+      setLowStockWarning(stockValue > 0 && stockValue < 10);
+    }
+
+    // Real-time validation for expiry date
+    if (name === 'expiryDate') {
+      const selectedDate = new Date(value);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (selectedDate < today) {
+        setExpiryWarning('⚠️ Cannot add medicine with expired date!');
+      } else if (selectedDate <= new Date(today.getTime() + 30 * 24 * 60 * 60 * 1000)) {
+        setExpiryWarning('⚠️ Medicine expires within 30 days');
+      } else {
+        setExpiryWarning('');
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setSuccess(false);
 
     try {
       // Convert stock and price to numbers
@@ -37,8 +68,27 @@ const AddMedicine = () => {
         price: parseFloat(formData.price)
       };
 
-      await medicineService.addMedicine(medicineData);
+      // Final validation check before submission
+      const expiryDate = new Date(medicineData.expiryDate);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      if (expiryDate < today) {
+        setError('Cannot add medicine with expired date. Please check the expiry date.');
+        setLoading(false);
+        return;
+      }
+
+      const response = await medicineService.addMedicine(medicineData);
+      
+      // Show detailed success message
       setSuccess(true);
+      setError(null);
+      
+      // Show low stock warning in success message if applicable
+      if (medicineData.stock < 10) {
+        console.warn(`⚠️ Warning: ${medicineData.name} added with low stock (${medicineData.stock} units)`);
+      }
       
       // Reset form
       setFormData({
@@ -49,14 +99,28 @@ const AddMedicine = () => {
         stock: '',
         price: ''
       });
+      setLowStockWarning(false);
+      setExpiryWarning('');
 
       // Redirect to dashboard after 2 seconds
       setTimeout(() => {
         navigate('/dashboard');
       }, 2000);
     } catch (err) {
-      setError(err.message || 'Failed to add medicine. Please check all fields.');
-      console.error(err);
+      console.error('Add medicine error:', err);
+      
+      // Enhanced error handling based on error type
+      if (err.isNetworkError) {
+        setError('❌ Network Error: Cannot connect to server. Please check if the backend is running.');
+      } else if (err.isValidationError) {
+        setError(`❌ Validation Error: ${err.message}`);
+      } else if (err.response?.data?.message) {
+        setError(`❌ ${err.response.data.message}`);
+      } else {
+        setError(err.message || '❌ Failed to add medicine. Please check all fields and try again.');
+      }
+      
+      setSuccess(false);
     } finally {
       setLoading(false);
     }
@@ -102,12 +166,29 @@ const AddMedicine = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-green-600 bg-opacity-50 backdrop-blur-md rounded-xl p-4 mb-6 text-center"
+            className="bg-green-600 bg-opacity-50 backdrop-blur-md rounded-xl p-6 mb-6"
           >
-            <div className="text-4xl mb-2">✅</div>
-            <p className="text-white font-semibold">
-              Medicine added successfully! Redirecting to dashboard...
-            </p>
+            <div className="text-center">
+              <div className="text-5xl mb-3">✅</div>
+              <p className="text-white font-bold text-xl mb-2">
+                Medicine Added Successfully!
+              </p>
+              <div className="text-green-100 text-sm space-y-1">
+                <p>✓ Medicine ID: {formData.medicineId}</p>
+                <p>✓ Name: {formData.name}</p>
+                <p>✓ Stock: {formData.stock} units</p>
+              </div>
+              {lowStockWarning && (
+                <div className="mt-3 bg-yellow-600 bg-opacity-40 rounded-lg p-2">
+                  <p className="text-yellow-100 text-sm">
+                    ⚠️ Low Stock Warning: Stock is below 10 units
+                  </p>
+                </div>
+              )}
+              <p className="text-green-200 text-sm mt-3">
+                Redirecting to dashboard...
+              </p>
+            </div>
           </motion.div>
         )}
 
@@ -116,10 +197,24 @@ const AddMedicine = () => {
           <motion.div
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
-            className="bg-red-600 bg-opacity-50 backdrop-blur-md rounded-xl p-4 mb-6 text-center"
+            className="bg-red-600 bg-opacity-50 backdrop-blur-md rounded-xl p-6 mb-6"
           >
-            <div className="text-4xl mb-2">❌</div>
-            <p className="text-white font-semibold">{error}</p>
+            <div className="text-center">
+              <div className="text-5xl mb-3">❌</div>
+              <p className="text-white font-bold text-lg mb-2">
+                Failed to Add Medicine
+              </p>
+              <p className="text-red-100 text-sm">{error}</p>
+              <div className="mt-4 text-left bg-red-700 bg-opacity-30 rounded-lg p-3">
+                <p className="text-red-100 text-xs font-semibold mb-1">Troubleshooting:</p>
+                <ul className="text-red-200 text-xs space-y-1">
+                  <li>• Check if backend server is running on port 5000</li>
+                  <li>• Verify all required fields are filled correctly</li>
+                  <li>• Ensure expiry date is not in the past</li>
+                  <li>• Check that stock and price are positive numbers</li>
+                </ul>
+              </div>
+            </div>
           </motion.div>
         )}
 
@@ -189,8 +284,22 @@ const AddMedicine = () => {
                 value={formData.expiryDate}
                 onChange={handleChange}
                 required
+                min={getTodayDate()}
                 className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
               />
+              {expiryWarning && (
+                <motion.div
+                  initial={{ opacity: 0, y: -10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className={`mt-2 p-2 rounded-lg text-sm ${
+                    expiryWarning.includes('Cannot')
+                      ? 'bg-red-600 bg-opacity-40 text-red-100'
+                      : 'bg-yellow-600 bg-opacity-40 text-yellow-100'
+                  }`}
+                >
+                  {expiryWarning}
+                </motion.div>
+              )}
             </motion.div>
 
             {/* Stock and Price Grid */}
@@ -210,6 +319,18 @@ const AddMedicine = () => {
                   placeholder="e.g., 50"
                   className="w-full px-4 py-3 bg-gray-900 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                 />
+                {lowStockWarning && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="mt-2 p-2 bg-yellow-600 bg-opacity-40 rounded-lg"
+                  >
+                    <p className="text-yellow-100 text-xs flex items-center">
+                      <span className="mr-1">⚠️</span>
+                      Low Stock Warning: Below 10 units
+                    </p>
+                  </motion.div>
+                )}
               </motion.div>
 
               {/* Price */}
@@ -265,11 +386,23 @@ const AddMedicine = () => {
         {/* Info Card */}
         <motion.div
           variants={itemVariants}
-          className="mt-6 bg-blue-600 bg-opacity-30 backdrop-blur-md rounded-xl p-4 text-center"
+          className="mt-6 space-y-3"
         >
-          <p className="text-gray-200 text-sm">
-            💡 All fields marked with * are required
-          </p>
+          <div className="bg-blue-600 bg-opacity-30 backdrop-blur-md rounded-xl p-4">
+            <p className="text-gray-200 text-sm text-center">
+              💡 All fields marked with * are required
+            </p>
+          </div>
+          
+          <div className="bg-purple-600 bg-opacity-30 backdrop-blur-md rounded-xl p-4">
+            <p className="text-gray-200 text-sm font-semibold mb-2">📋 Validation Rules:</p>
+            <ul className="text-gray-300 text-xs space-y-1">
+              <li>✓ Expiry date must be in the future</li>
+              <li>✓ Stock must be 0 or greater</li>
+              <li>✓ Price must be greater than 0</li>
+              <li>⚠️ Low stock alert triggers when stock {'<'} 10</li>
+            </ul>
+          </div>
         </motion.div>
       </motion.div>
     </div>
