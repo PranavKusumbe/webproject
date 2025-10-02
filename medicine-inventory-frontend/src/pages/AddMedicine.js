@@ -18,6 +18,7 @@ const AddMedicine = () => {
   const [success, setSuccess] = useState(false);
   const [lowStockWarning, setLowStockWarning] = useState(false);
   const [expiryWarning, setExpiryWarning] = useState('');
+  const [submittedInfo, setSubmittedInfo] = useState(null);
 
   // Get today's date in YYYY-MM-DD format for min date validation
   const getTodayDate = () => {
@@ -31,6 +32,8 @@ const AddMedicine = () => {
       ...formData,
       [name]: value
     });
+    // Clear previous submission details when editing again
+    if (submittedInfo) setSubmittedInfo(null);
 
     // Real-time validation for stock (low stock warning)
     if (name === 'stock') {
@@ -82,6 +85,11 @@ const AddMedicine = () => {
       const response = await medicineService.addMedicine(medicineData);
       
       // Show detailed success message
+      setSubmittedInfo({
+        medicineId: medicineData.medicineId,
+        name: medicineData.name,
+        stock: medicineData.stock
+      });
       setSuccess(true);
       setError(null);
       
@@ -99,8 +107,8 @@ const AddMedicine = () => {
         stock: '',
         price: ''
       });
-      setLowStockWarning(false);
-      setExpiryWarning('');
+  setLowStockWarning(false);
+  setExpiryWarning('');
 
       // Redirect to dashboard after 2 seconds
       setTimeout(() => {
@@ -174,11 +182,11 @@ const AddMedicine = () => {
                 Medicine Added Successfully!
               </p>
               <div className="text-green-100 text-sm space-y-1">
-                <p>✓ Medicine ID: {formData.medicineId}</p>
-                <p>✓ Name: {formData.name}</p>
-                <p>✓ Stock: {formData.stock} units</p>
+                <p>✓ Medicine ID: {submittedInfo?.medicineId}</p>
+                <p>✓ Name: {submittedInfo?.name}</p>
+                <p>✓ Stock: {submittedInfo?.stock} units</p>
               </div>
-              {lowStockWarning && (
+              {submittedInfo?.stock !== undefined && submittedInfo.stock < 10 && (
                 <div className="mt-3 bg-yellow-600 bg-opacity-40 rounded-lg p-2">
                   <p className="text-yellow-100 text-sm">
                     ⚠️ Low Stock Warning: Stock is below 10 units

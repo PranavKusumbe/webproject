@@ -10,6 +10,23 @@ router.post("/add", async (req, res) => {
   try {
     const { medicineId, name, manufacturer, expiryDate, stock, price } = req.body;
 
+    // Validate required fields and business rules
+    if (!medicineId || !name || !manufacturer || expiryDate === undefined || stock === undefined || price === undefined) {
+      return res.status(400).json({ success: false, message: "All fields are required" });
+    }
+    const expiry = new Date(expiryDate);
+    if (isNaN(expiry.getTime())) {
+      return res.status(400).json({ success: false, message: "Invalid expiry date" });
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (expiry < today) {
+      return res.status(400).json({ success: false, message: "Cannot add medicine with expired date" });
+    }
+    if (typeof price !== 'number' || price <= 0) {
+      return res.status(400).json({ success: false, message: "Price must be greater than 0" });
+    }
+
     // Check if medicine with same ID already exists
     const existingMedicine = await Medicine.findOne({ medicineId });
     if (existingMedicine) {
@@ -141,6 +158,16 @@ router.get("/expired/list", async (req, res) => {
   }
 });
 
+// Alias endpoint: GET /api/medicines/expired
+router.get("/expired", async (req, res) => {
+  try {
+    const expiredMedicines = await Medicine.findExpired();
+    res.status(200).json({ success: true, count: expiredMedicines.length, data: expiredMedicines });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching expired medicines", error: error.message });
+  }
+});
+
 // GET /api/medicines/lowstock?threshold=50 - Get medicines with low stock
 router.get("/lowstock/list", async (req, res) => {
   try {
@@ -162,6 +189,17 @@ router.get("/lowstock/list", async (req, res) => {
   }
 });
 
+// Alias endpoint: GET /api/medicines/lowstock
+router.get("/lowstock", async (req, res) => {
+  try {
+    const threshold = parseInt(req.query.threshold) || 50;
+    const lowStockMedicines = await Medicine.findLowStock(threshold);
+    res.status(200).json({ success: true, count: lowStockMedicines.length, threshold, data: lowStockMedicines });
+  } catch (error) {
+    res.status(500).json({ success: false, message: "Error fetching low stock medicines", error: error.message });
+  }
+});
+
 // ==================== UPDATE ====================
 
 // PUT /api/medicines/update/:id - Update medicine by ID
@@ -176,6 +214,24 @@ router.put("/update/:id", async (req, res) => {
         success: false,
         message: "Medicine not found"
       });
+    }
+
+    // Validate fields if provided
+    if (expiryDate) {
+      const exp = new Date(expiryDate);
+      if (isNaN(exp.getTime())) {
+        return res.status(400).json({ success: false, message: "Invalid expiry date" });
+      }
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (exp < today) {
+        return res.status(400).json({ success: false, message: "Cannot update medicine with expired date" });
+      }
+    }
+    if (price !== undefined) {
+      if (typeof price !== 'number' || price <= 0) {
+        return res.status(400).json({ success: false, message: "Price must be greater than 0" });
+      }
     }
 
     // Update fields if provided
